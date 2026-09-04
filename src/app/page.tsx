@@ -17,21 +17,22 @@ export default function Home() {
     setError(null);
 
     try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt }),
+      // Use Pollinations AI (Free, no API key required)
+      // We append a random seed so it generates a new image even if the prompt is the same
+      const seed = Math.floor(Math.random() * 1000000);
+      const enhancedPrompt = encodeURIComponent(`comic book panel, highly detailed, colorful, ${prompt}`);
+      const newImageUrl = `https://image.pollinations.ai/prompt/${enhancedPrompt}?width=800&height=800&nologo=true&seed=${seed}`;
+      
+      // Pre-load the image to ensure it's ready before showing it
+      const img = new Image();
+      img.src = newImageUrl;
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('Failed to load image from AI provider'));
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Something went wrong');
-      }
-
-      setImageUrl(data.imageUrl);
+      setImageUrl(newImageUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -79,7 +80,7 @@ export default function Home() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Generating...
+                Generating... (Takes ~10 seconds)
               </>
             ) : (
               'Generate Comic Panel'
