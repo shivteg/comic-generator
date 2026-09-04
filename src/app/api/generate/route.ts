@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
+import { getCloudflareCredentials } from '@/lib/cloudflare';
 
 export async function POST(request: Request) {
-  const { prompt } = await request.json();
+  const { prompt, panelCount = 5 } = await request.json();
 
   if (!prompt) {
     return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
     const systemPrompt = `You are an expert comic book script writer. 
 The user wants a comic story based on this description: "${prompt}"
 
-Break the story down into EXACTLY 5 panels. 
+Break the story down into EXACTLY ${panelCount} panels. 
 For each panel, write a highly descriptive visual prompt for an AI image generator.
 Also write the dialogue (text bubbles) for the characters in that panel. If there is no dialogue, provide a narration text.
 
@@ -25,13 +26,35 @@ You MUST respond ONLY with a valid JSON object in this exact format, with no mar
   ]
 }`;
 
-    const encodedPrompt = encodeURIComponent(systemPrompt);
     let textData = "";
+    
     try {
-      const response = await fetch(`https://text.pollinations.ai/prompt/${encodedPrompt}?json=true`);
-      if (response.ok) {
-        textData = await response.text();
-        textData = textData.replace(/```json/g, '').replace(/```/g, '').trim();
+      const { accountId, apiToken } = getCloudflareCredentials();
+      const model = '@cf/meta/llama-3-8b-instruct';
+      const textResponse = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt }
+            ]
+          }),
+        }
+      );
+      
+      if (textResponse.ok) {
+        const textJson = await textResponse.json();
+        textData = textJson.result.response;
+        // Strip markdown if Llama returned it
+        textData = textData.replace(/```json/gi, '').replace(/```/g, '').trim();
+      } else {
+        console.error("Cloudflare text API failed:", await textResponse.text());
       }
     } catch (e) {
       console.error("Fetch failed:", e);
@@ -43,42 +66,65 @@ You MUST respond ONLY with a valid JSON object in this exact format, with no mar
       if (!parsedData.panels) throw new Error("No panels array");
     } catch (parseError) {
       console.error('LLM API failed or returned invalid JSON. Using fallback story.');
-      // Fallback story if the free LLM is down (like 502 Bad Gateway)
+      
+      const fallbackPanels = [];
+      for (let i = 0; i < panelCount; i++) {
+        fallbackPanels.push({
+          image_prompt: `Panel ${i+1} illustrating: ${prompt}`,
+          dialogues: [`Fallback dialogue for panel ${i+1}...`]
+        });
+      }
+      
       parsedData = {
-        panels: [
-          {
-            image_prompt: `Establishing wide shot of ${prompt}`,
-            dialogues: ["This is where it begins..."]
-          },
-          {
-            image_prompt: `Close up action shot related to: ${prompt}`,
-            dialogues: ["Look out!", "I can handle this."]
-          },
-          {
-            image_prompt: `Dramatic angle showing the main conflict of: ${prompt}`,
-            dialogues: ["It's too powerful!"]
-          },
-          {
-            image_prompt: `Heroic counter-attack scene for: ${prompt}`,
-            dialogues: ["Not on my watch!"]
-          },
-          {
-            image_prompt: `Epic resolution and victory pose for: ${prompt}`,
-            dialogues: ["The day is saved.", "For now..."]
-          }
-        ]
+        panels: fallbackPanels
       };
     }
 
-    // Now format the image URLs for the frontend
-    const panels = parsedData.panels.map((panel: any) => {
-      const seed = Math.floor(Math.random() * 1000000);
-      const encodedImgPrompt = encodeURIComponent(`comic book panel, highly detailed, colorful, ${panel.image_prompt}`);
+    // Generate images in parallel using Cloudflare AI
+    const panels = await Promise.all(parsedData.panels.map(async (panel: any) => {
+      let imageUrl = "";
+      
+      try {
+        const { accountId, apiToken } = getCloudflareCredentials(); // Rotate key for each image
+        const imgModel = '@cf/lykon/dreamshaper-8-lcm'; 
+        const response = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${imgModel}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${apiToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              prompt: `comic book panel, highly detailed, colorful, ${panel.image_prompt}`,
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const imageBuffer = await response.arrayBuffer();
+          const base64Image = Buffer.from(imageBuffer).toString('base64');
+          imageUrl = `data:image/jpeg;base64,${base64Image}`;
+        } else {
+          console.error('Cloudflare Image API Error:', await response.text());
+          // Fallback to pollinations if cloudflare fails
+          const seed = Math.floor(Math.random() * 1000000);
+          const encodedImgPrompt = encodeURIComponent(`comic book panel, highly detailed, colorful, ${panel.image_prompt}`);
+          imageUrl = `https://image.pollinations.ai/prompt/${encodedImgPrompt}?width=800&height=800&nologo=true&seed=${seed}`;
+        }
+      } catch (e) {
+        console.error('Cloudflare Image Fetch Error:', e);
+        // Fallback to pollinations
+        const seed = Math.floor(Math.random() * 1000000);
+        const encodedImgPrompt = encodeURIComponent(`comic book panel, highly detailed, colorful, ${panel.image_prompt}`);
+        imageUrl = `https://image.pollinations.ai/prompt/${encodedImgPrompt}?width=800&height=800&nologo=true&seed=${seed}`;
+      }
+
       return {
-        imageUrl: `https://image.pollinations.ai/prompt/${encodedImgPrompt}?width=800&height=800&nologo=true&seed=${seed}`,
+        imageUrl,
         dialogues: panel.dialogues.map((d: string) => ({ text: d }))
       };
-    });
+    }));
 
     return NextResponse.json({ panels });
   } catch (error) {
