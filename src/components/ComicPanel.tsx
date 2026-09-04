@@ -56,6 +56,9 @@ export default function ComicPanel({
     );
   };
 
+  const [imageError, setImageError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
   if (!imageUrl) {
     return (
       <div className="w-full h-96 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-500">
@@ -63,6 +66,9 @@ export default function ComicPanel({
       </div>
     );
   }
+
+  // Add a cache-buster to the URL when retrying to bypass browser cache
+  const currentImageUrl = retryCount > 0 ? `${imageUrl}&retry=${retryCount}` : imageUrl;
 
   return (
     <div className="flex flex-col gap-4">
@@ -75,11 +81,31 @@ export default function ComicPanel({
 
       <div 
         ref={containerRef}
-        className="relative inline-block border-4 border-gray-900 rounded-md overflow-hidden max-w-full"
+        className="relative inline-block border-4 border-gray-900 rounded-md overflow-hidden max-w-full min-h-[400px] min-w-[400px] bg-gray-100 flex items-center justify-center"
         style={{ width: 'fit-content' }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imageUrl} alt="Generated comic panel" className="max-w-full h-auto block" />
+        {imageError ? (
+          <div className="flex flex-col items-center justify-center p-8 space-y-4">
+            <p className="text-red-500 font-medium">Image generation timed out (Free AI limits).</p>
+            <button 
+              onClick={() => {
+                setImageError(false);
+                setRetryCount(r => r + 1);
+              }}
+              className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-black transition"
+            >
+              Retry Loading Image
+            </button>
+          </div>
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img 
+            src={currentImageUrl} 
+            alt="Generated comic panel" 
+            className="max-w-full h-auto block" 
+            onError={() => setImageError(true)}
+          />
+        )}
 
         {bubbles.map((bubble) => (
           <Rnd
