@@ -26,18 +26,49 @@ You MUST respond ONLY with a valid JSON object in this exact format, with no mar
 }`;
 
     const encodedPrompt = encodeURIComponent(systemPrompt);
-    const response = await fetch(`https://text.pollinations.ai/prompt/${encodedPrompt}?json=true`);
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch from LLM');
+    let textData = "";
+    try {
+      const response = await fetch(`https://text.pollinations.ai/prompt/${encodedPrompt}?json=true`);
+      if (response.ok) {
+        textData = await response.text();
+        textData = textData.replace(/```json/g, '').replace(/```/g, '').trim();
+      }
+    } catch (e) {
+      console.error("Fetch failed:", e);
     }
-
-    let textData = await response.text();
     
-    // Clean up potential markdown formatting if the LLM hallucinated it
-    textData = textData.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    const parsedData = JSON.parse(textData);
+    let parsedData;
+    try {
+      parsedData = JSON.parse(textData);
+      if (!parsedData.panels) throw new Error("No panels array");
+    } catch (parseError) {
+      console.error('LLM API failed or returned invalid JSON. Using fallback story.');
+      // Fallback story if the free LLM is down (like 502 Bad Gateway)
+      parsedData = {
+        panels: [
+          {
+            image_prompt: `Establishing wide shot of ${prompt}`,
+            dialogues: ["This is where it begins..."]
+          },
+          {
+            image_prompt: `Close up action shot related to: ${prompt}`,
+            dialogues: ["Look out!", "I can handle this."]
+          },
+          {
+            image_prompt: `Dramatic angle showing the main conflict of: ${prompt}`,
+            dialogues: ["It's too powerful!"]
+          },
+          {
+            image_prompt: `Heroic counter-attack scene for: ${prompt}`,
+            dialogues: ["Not on my watch!"]
+          },
+          {
+            image_prompt: `Epic resolution and victory pose for: ${prompt}`,
+            dialogues: ["The day is saved.", "For now..."]
+          }
+        ]
+      };
+    }
 
     // Now format the image URLs for the frontend
     const panels = parsedData.panels.map((panel: any) => {
