@@ -7,48 +7,51 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
   }
 
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-
-  if (!accountId || !apiToken) {
-    return NextResponse.json(
-      { error: 'Cloudflare credentials are not configured.' },
-      { status: 500 }
-    );
-  }
-
   try {
-    // Using Dreamshaper model which is good for colorful/comic style
-    const model = '@cf/lykon/dreamshaper-8-lcm'; 
-    const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: `comic book panel, highly detailed, colorful, ${prompt}`,
-        }),
-      }
-    );
+    const systemPrompt = `You are an expert comic book script writer. 
+The user wants a comic story based on this description: "${prompt}"
 
+Break the story down into EXACTLY 5 panels. 
+For each panel, write a highly descriptive visual prompt for an AI image generator.
+Also write the dialogue (text bubbles) for the characters in that panel. If there is no dialogue, provide a narration text.
+
+You MUST respond ONLY with a valid JSON object in this exact format, with no markdown formatting, no code blocks, and no extra text:
+{
+  "panels": [
+    {
+      "image_prompt": "A highly detailed, colorful comic book panel of...",
+      "dialogues": ["Text for bubble 1", "Text for bubble 2"]
+    }
+  ]
+}`;
+
+    const encodedPrompt = encodeURIComponent(systemPrompt);
+    const response = await fetch(`https://text.pollinations.ai/prompt/${encodedPrompt}?json=true`);
+    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Cloudflare AI Error:', errorText);
-      return NextResponse.json({ error: 'Failed to generate image' }, { status: 500 });
+      throw new Error('Failed to fetch from LLM');
     }
 
-    // Cloudflare AI returns the image as binary data
-    const imageBuffer = await response.arrayBuffer();
-    const base64Image = Buffer.from(imageBuffer).toString('base64');
+    let textData = await response.text();
     
-    return NextResponse.json({ 
-      imageUrl: `data:image/jpeg;base64,${base64Image}`
+    // Clean up potential markdown formatting if the LLM hallucinated it
+    textData = textData.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    const parsedData = JSON.parse(textData);
+
+    // Now format the image URLs for the frontend
+    const panels = parsedData.panels.map((panel: any) => {
+      const seed = Math.floor(Math.random() * 1000000);
+      const encodedImgPrompt = encodeURIComponent(`comic book panel, highly detailed, colorful, ${panel.image_prompt}`);
+      return {
+        imageUrl: `https://image.pollinations.ai/prompt/${encodedImgPrompt}?width=800&height=800&nologo=true&seed=${seed}`,
+        dialogues: panel.dialogues.map((d: string) => ({ text: d }))
+      };
     });
+
+    return NextResponse.json({ panels });
   } catch (error) {
     console.error('Generation error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to generate story panels. Please try again.' }, { status: 500 });
   }
 }

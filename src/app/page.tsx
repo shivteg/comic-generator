@@ -3,9 +3,14 @@
 import { useState } from 'react';
 import ComicPanel from '@/components/ComicPanel';
 
+interface PanelData {
+  imageUrl: string;
+  dialogues: { text: string }[];
+}
+
 export default function Home() {
   const [prompt, setPrompt] = useState('');
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [panels, setPanels] = useState<PanelData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,24 +20,24 @@ export default function Home() {
 
     setLoading(true);
     setError(null);
+    setPanels([]); // clear old panels
 
     try {
-      // Use Pollinations AI (Free, no API key required)
-      // We append a random seed so it generates a new image even if the prompt is the same
-      const seed = Math.floor(Math.random() * 1000000);
-      const enhancedPrompt = encodeURIComponent(`comic book panel, highly detailed, colorful, ${prompt}`);
-      const newImageUrl = `https://image.pollinations.ai/prompt/${enhancedPrompt}?width=800&height=800&nologo=true&seed=${seed}`;
-      
-      // Pre-load the image to ensure it's ready before showing it
-      const img = new Image();
-      img.src = newImageUrl;
-      
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = () => reject(new Error('Failed to load image from AI provider'));
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
       });
 
-      setImageUrl(newImageUrl);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Something went wrong');
+      }
+
+      setPanels(data.panels);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -48,21 +53,20 @@ export default function Home() {
             AI Comic Generator
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Describe your scene, and we'll generate a colorful comic book panel. 
-            You can then add editable text bubbles to bring your story to life!
+            Describe your scene, and our AI will automatically write a 5-panel story, generate the art, and place the editable text bubbles for you!
           </p>
         </header>
 
         <form onSubmit={generateComic} className="space-y-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div>
             <label htmlFor="prompt" className="block text-sm font-medium text-gray-700 mb-1">
-              Scene Description
+              Story Prompt
             </label>
             <textarea
               id="prompt"
               rows={3}
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              placeholder="A superhero soaring through a neon-lit cyberpunk city, action-packed..."
+              placeholder="A superhero soaring through a neon-lit cyberpunk city, fighting shadow monsters..."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               required
@@ -80,10 +84,10 @@ export default function Home() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Generating... (Takes ~10 seconds)
+                Writing Story & Generating Art... (Takes ~15 seconds)
               </>
             ) : (
-              'Generate Comic Panel'
+              'Generate 5-Page Comic'
             )}
           </button>
           
@@ -94,10 +98,17 @@ export default function Home() {
           )}
         </form>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-          <h2 className="text-xl font-bold mb-4">Your Comic</h2>
-          <ComicPanel imageUrl={imageUrl} />
-        </div>
+        {panels.length > 0 && (
+          <div className="space-y-12">
+            <h2 className="text-2xl font-bold text-center border-b pb-4">Your Comic Story</h2>
+            {panels.map((panel, index) => (
+              <div key={index} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-500 mb-4 uppercase tracking-wider">Panel {index + 1}</h3>
+                <ComicPanel imageUrl={panel.imageUrl} initialBubbles={panel.dialogues} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );

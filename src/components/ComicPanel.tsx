@@ -13,8 +13,23 @@ interface TextBubble {
   height: number;
 }
 
-export default function ComicPanel({ imageUrl }: { imageUrl: string | null }) {
-  const [bubbles, setBubbles] = useState<TextBubble[]>([]);
+export default function ComicPanel({ 
+  imageUrl, 
+  initialBubbles = [] 
+}: { 
+  imageUrl: string | null;
+  initialBubbles?: { text: string }[];
+}) {
+  const [bubbles, setBubbles] = useState<TextBubble[]>(
+    initialBubbles.map((b, index) => ({
+      id: Math.random().toString(36).substring(7),
+      text: b.text,
+      x: 50 + (index * 20), // stagger them slightly
+      y: 50 + (index * 20),
+      width: 150,
+      height: 100,
+    }))
+  );
   const containerRef = useRef<HTMLDivElement>(null);
 
   const addBubble = () => {
