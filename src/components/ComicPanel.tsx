@@ -79,7 +79,20 @@ export default function ComicPanel({
   }
 
   // Add a cache-buster to the URL when retrying to bypass browser cache
-  const currentImageUrl = retryCount > 0 ? `${imageUrl}&retry=${retryCount}` : imageUrl;
+  let currentImageUrl = imageUrl;
+  if (retryCount > 0) {
+    if (imageUrl.startsWith('data:')) {
+      // Data URIs don't need cache busting and adding params breaks them
+      currentImageUrl = imageUrl;
+    } else if (imageUrl.includes('pollinations.ai')) {
+      // For pollinations, modify the seed predictably using retryCount to force a new generation attempt
+      currentImageUrl = imageUrl.replace(/seed=(\d+)/, (match, p1) => `seed=${parseInt(p1) + retryCount}`) + `&retry=${retryCount}`;
+    } else if (imageUrl.includes('?')) {
+      currentImageUrl = `${imageUrl}&retry=${retryCount}`;
+    } else {
+      currentImageUrl = `${imageUrl}?retry=${retryCount}`;
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
