@@ -65,7 +65,6 @@ export default function Home() {
     try {
       const canvas = await html2canvas(element, {
         useCORS: true,
-        allowTaint: true,
         backgroundColor: '#ffffff',
         scale: 2 // Higher resolution
       });

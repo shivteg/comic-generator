@@ -112,6 +112,7 @@ export default function ComicPanel({
         <img 
           src={currentImageUrl} 
           alt="Generated comic panel" 
+          crossOrigin="anonymous"
           className="max-w-full h-auto block" 
           onError={() => {
             if (retryCount < 10) {
