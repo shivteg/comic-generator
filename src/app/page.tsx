@@ -46,6 +46,46 @@ export default function Home() {
     }
   };
 
+  const exportComic = async () => {
+    const element = document.getElementById('comic-export-area');
+    if (!element) return;
+    
+    // We can use dynamic import so it doesn't break SSR
+    const html2canvas = (await import('html2canvas')).default;
+    
+    // Temporarily hide UI elements we don't want in the export
+    // like the "Add Text Bubble" buttons and delete buttons
+    const exportElements = element.querySelectorAll('.group-hover\\:opacity-100, button');
+    const originalStyles: string[] = [];
+    exportElements.forEach((el, i) => {
+      originalStyles[i] = (el as HTMLElement).style.display;
+      (el as HTMLElement).style.display = 'none';
+    });
+
+    try {
+      const canvas = await html2canvas(element, {
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        scale: 2 // Higher resolution
+      });
+      
+      const image = canvas.toDataURL('image/jpeg', 0.9);
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = 'my-ai-comic.jpg';
+      link.click();
+    } catch (err) {
+      console.error('Error exporting comic:', err);
+      alert('Failed to export comic. Please try again.');
+    } finally {
+      // Restore elements
+      exportElements.forEach((el, i) => {
+        (el as HTMLElement).style.display = originalStyles[i];
+      });
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900 p-8">
       <div className="max-w-4xl mx-auto space-y-8">
@@ -116,14 +156,30 @@ export default function Home() {
         </form>
 
         {panels.length > 0 && (
-          <div className="space-y-12">
-            <h2 className="text-2xl font-bold text-center border-b pb-4">Your Comic Story</h2>
-            {panels.map((panel, index) => (
-              <div key={index} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-500 mb-4 uppercase tracking-wider">Panel {index + 1}</h3>
-                <ComicPanel imageUrl={panel.imageUrl} initialBubbles={panel.dialogues} />
-              </div>
-            ))}
+          <div className="space-y-8">
+            <div className="flex items-center justify-between border-b pb-4">
+              <h2 className="text-2xl font-bold text-center">Your Comic Story</h2>
+              <button
+                onClick={exportComic}
+                className="px-6 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition shadow-md flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Download Comic
+              </button>
+            </div>
+            
+            <div id="comic-export-area" className="space-y-12 bg-gray-50 p-8 rounded-xl">
+              {panels.map((panel, index) => (
+                <div key={index} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-500 mb-4 uppercase tracking-wider">Panel {index + 1}</h3>
+                  <ComicPanel imageUrl={panel.imageUrl} initialBubbles={panel.dialogues} />
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
