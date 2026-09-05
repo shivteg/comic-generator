@@ -64,7 +64,7 @@ You MUST respond ONLY with a valid JSON object in this exact format, with no mar
     try {
       parsedData = JSON.parse(textData);
       if (!parsedData.panels) throw new Error("No panels array");
-    } catch (parseError) {
+    } catch {
       console.error('LLM API failed or returned invalid JSON. Using fallback story.');
       
       const fallbackPanels = [];
@@ -81,7 +81,7 @@ You MUST respond ONLY with a valid JSON object in this exact format, with no mar
     }
 
     // Generate images in parallel using Cloudflare AI
-    const panels = await Promise.all(parsedData.panels.map(async (panel: any) => {
+    const panels = await Promise.all(parsedData.panels.map(async (panel: { image_prompt: string; dialogues: string[] }) => {
       let imageUrl = "";
       
       try {

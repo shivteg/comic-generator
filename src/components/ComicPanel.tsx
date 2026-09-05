@@ -24,7 +24,7 @@ export default function ComicPanel({
 }) {
   const [bubbles, setBubbles] = useState<TextBubble[]>(
     initialBubbles.map((b, index) => ({
-      id: Math.random().toString(36).substring(7),
+      id: `initial-bubble-${index}`,
       text: b.text,
       x: 50 + (index * 20),
       y: 50 + (index * 20),
@@ -68,7 +68,6 @@ export default function ComicPanel({
     );
   };
 
-  const [imageError, setImageError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   if (!imageUrl) {
@@ -96,28 +95,17 @@ export default function ComicPanel({
         className="relative inline-block border-4 border-gray-900 rounded-md overflow-hidden max-w-full min-h-[400px] min-w-[400px] bg-gray-100 flex items-center justify-center"
         style={{ width: 'fit-content' }}
       >
-        {imageError ? (
-          <div className="flex flex-col items-center justify-center p-8 space-y-4">
-            <p className="text-red-500 font-medium">Image generation timed out (Free AI limits).</p>
-            <button 
-              onClick={() => {
-                setImageError(false);
-                setRetryCount(r => r + 1);
-              }}
-              className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-black transition"
-            >
-              Retry Loading Image
-            </button>
-          </div>
-        ) : (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img 
-            src={currentImageUrl} 
-            alt="Generated comic panel" 
-            className="max-w-full h-auto block" 
-            onError={() => setImageError(true)}
-          />
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img 
+          src={currentImageUrl} 
+          alt="Generated comic panel" 
+          className="max-w-full h-auto block" 
+          onError={() => {
+            if (retryCount < 10) {
+              setTimeout(() => setRetryCount(r => r + 1), 1000);
+            }
+          }}
+        />
 
         {bubbles.map((bubble) => {
           let shapeClasses = "bg-white border-[3px] border-black rounded-[2rem] p-4 flex items-center justify-center relative shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-10 transition-transform";
@@ -173,7 +161,7 @@ export default function ComicPanel({
                 <select 
                   className="bg-transparent text-xs outline-none cursor-pointer p-1"
                   value={bubble.bubbleShape || 'speech'}
-                  onChange={(e) => updateBubbleStyle(bubble.id, { bubbleShape: e.target.value as any })}
+                  onChange={(e) => updateBubbleStyle(bubble.id, { bubbleShape: e.target.value as TextBubble['bubbleShape'] })}
                 >
                   <option className="text-black" value="speech">Speech</option>
                   <option className="text-black" value="thought">Thought</option>
@@ -184,7 +172,7 @@ export default function ComicPanel({
                 <select 
                   className="bg-transparent text-xs outline-none cursor-pointer p-1 border-l border-gray-700"
                   value={bubble.font || 'comic-neue'}
-                  onChange={(e) => updateBubbleStyle(bubble.id, { font: e.target.value as any })}
+                  onChange={(e) => updateBubbleStyle(bubble.id, { font: e.target.value as TextBubble['font'] })}
                 >
                   <option className="text-black" value="comic-neue">Comic Neue</option>
                   <option className="text-black" value="bangers">Bangers</option>
