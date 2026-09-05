@@ -51,7 +51,7 @@ export default function Home() {
     if (!element) return;
     
     // We can use dynamic import so it doesn't break SSR
-    const html2canvas = (await import('html2canvas')).default;
+    const { toJpeg } = await import('html-to-image');
     
     // Temporarily hide UI elements we don't want in the export
     // like the "Add Text Bubble" buttons and delete buttons
@@ -85,15 +85,17 @@ export default function Home() {
         }
       }));
 
-      const canvas = await html2canvas(element, {
-        useCORS: true,
+      // Small delay to ensure browser re-renders the Data URIs
+      await new Promise(r => setTimeout(r, 100));
+
+      const dataUrl = await toJpeg(element, {
+        quality: 0.95,
         backgroundColor: '#ffffff',
-        scale: 2 // Higher resolution
+        pixelRatio: 2, // Higher resolution
       });
       
-      const image = canvas.toDataURL('image/jpeg', 0.9);
       const link = document.createElement('a');
-      link.href = image;
+      link.href = dataUrl;
       link.download = 'my-ai-comic.jpg';
       link.click();
     } catch (err: unknown) {
