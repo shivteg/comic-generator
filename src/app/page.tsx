@@ -62,7 +62,29 @@ export default function Home() {
       (el as HTMLElement).style.display = 'none';
     });
 
+    const images = Array.from(element.querySelectorAll('img'));
+    const originalSrcs = new Map<HTMLImageElement, string>();
+
     try {
+      // Pre-process images to Data URIs to absolutely prevent tainted canvas errors
+      await Promise.all(images.map(async (img) => {
+        if (img.src.startsWith('data:')) return; // Already a Data URI
+        try {
+          // Fetch the image with cache-busting to avoid CORS cache issues
+          const response = await fetch(img.src + (img.src.includes('?') ? '&' : '?') + 'cors-bypass=' + Date.now());
+          const blob = await response.blob();
+          const reader = new FileReader();
+          const dataUri = await new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+          originalSrcs.set(img, img.src);
+          img.src = dataUri;
+        } catch (e) {
+          console.warn('Failed to convert image to Data URI:', e);
+        }
+      }));
+
       const canvas = await html2canvas(element, {
         useCORS: true,
         backgroundColor: '#ffffff',
@@ -74,13 +96,18 @@ export default function Home() {
       link.href = image;
       link.download = 'my-ai-comic.jpg';
       link.click();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error exporting comic:', err);
-      alert('Failed to export comic. Please try again.');
+      alert('Failed to export comic: ' + (err.message || String(err)));
     } finally {
-      // Restore elements
+      // Restore elements and images
       exportElements.forEach((el, i) => {
         (el as HTMLElement).style.display = originalStyles[i];
+      });
+      images.forEach(img => {
+        if (originalSrcs.has(img)) {
+          img.src = originalSrcs.get(img)!;
+        }
       });
     }
   };
