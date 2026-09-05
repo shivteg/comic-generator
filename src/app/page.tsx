@@ -96,9 +96,9 @@ export default function Home() {
       link.href = image;
       link.download = 'my-ai-comic.jpg';
       link.click();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error exporting comic:', err);
-      alert('Failed to export comic: ' + (err.message || String(err)));
+      alert('Failed to export comic: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       // Restore elements and images
       exportElements.forEach((el, i) => {
